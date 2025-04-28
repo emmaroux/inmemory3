@@ -1,20 +1,15 @@
-// import type { Core } from '@strapi/strapi';
+import seed from '../scripts/seed'; // Chemin relatif depuis /src
 
 export default {
-  /**
-   * An asynchronous register function that runs before
-   * your application is initialized.
-   *
-   * This gives you an opportunity to extend code.
-   */
-  register(/* { strapi }: { strapi: Core.Strapi } */) {},
+  register(/* { strapi }: { strapi: Core.Strapi } */) {
+    // Tu peux laisser vide pour le moment
+  },
 
-  /**
-   * An asynchronous bootstrap function that runs before
-   * your application gets started.
-   *
-   * This gives you an opportunity to set up your data model,
-   * run jobs, or perform some special logic.
-   */
-  bootstrap(/* { strapi }: { strapi: Core.Strapi } */) {},
+  async bootstrap({ strapi }: { strapi: any }) {
+    if (process.env.SHOULD_SEED) {
+      console.log('🌱 Seed automatique lancé...');
+      await seed(strapi);
+      console.log('✅ Seed terminé.');
+    }
+  },
 };
