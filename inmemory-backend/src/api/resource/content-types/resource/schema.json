@@ -33,8 +33,7 @@
     "teams": {
       "type": "relation",
       "relation": "manyToMany",
-      "target": "api::team.team",
-      "inversedBy": "resources"
+      "target": "api::team.team"
     },
     "votes": {
       "type": "relation",

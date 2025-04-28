@@ -1,13 +1,11 @@
-console.log('🚀 seed.ts chargé et prêt');
-
 const seed = async (strapi) => {
+  console.log('🚀 seed.ts chargé et prêt');
   console.log('🛠️ Démarrage du seed...');
 
-  const faker = (await import('@faker-js/faker')).fakerFR; // utilisation dynamique pour être sûr
+  const faker = (await import('@faker-js/faker')).fakerFR;
 
   const otherTeams = [];
 
-  // 1. Créer l'équipe Welcome
   const welcomeTeam = await strapi.entityService.create('api::team.team', {
     data: {
       name: 'Welcome',
@@ -16,7 +14,6 @@ const seed = async (strapi) => {
     },
   });
 
-  // 2. Créer d'autres équipes
   for (let i = 0; i < 4; i++) {
     const team = await strapi.entityService.create('api::team.team', {
       data: {
@@ -30,30 +27,8 @@ const seed = async (strapi) => {
 
   const allTeams = [welcomeTeam, ...otherTeams];
 
-  // 3. Créer des utilisateurs
-  const users = [];
-  for (let i = 0; i < 20; i++) {
-    const username = faker.internet.userName();
-    const email = faker.internet.email();
-    const randomTeams = faker.helpers.arrayElements(otherTeams, faker.number.int({ min: 1, max: 2 }));
-    const teamIds = [welcomeTeam.id, ...randomTeams.map((t) => t.id)];
-
-    const user = await strapi.entityService.create('plugin::users-permissions.user', {
-      data: {
-        username,
-        email,
-        password: 'password',
-        confirmed: true,
-        teams: teamIds,
-      },
-    });
-
-    users.push(user);
-  }
-
-  // 4. Créer des ressources
   const resources = [];
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 20; i++) {
     const title = faker.lorem.sentence();
     const description = faker.lorem.paragraph();
     const link = faker.internet.url();
@@ -79,7 +54,7 @@ const seed = async (strapi) => {
         title,
         description,
         link,
-        imageUrl: faker.image.url(), // Ajout d'une image fictive
+        imageUrl: faker.image.url(),
         isPublic: Math.random() < 0.3,
         teams: teamIds,
       },
@@ -88,9 +63,7 @@ const seed = async (strapi) => {
     resources.push(resource);
   }
 
-  // 5. Créer des votes
-  for (let i = 0; i < 100; i++) {
-    const user = faker.helpers.arrayElement(users);
+  for (let i = 0; i < 40; i++) {
     const resource = faker.helpers.arrayElement(resources);
     const team = faker.helpers.arrayElement(allTeams);
 
@@ -98,16 +71,13 @@ const seed = async (strapi) => {
       data: {
         value: faker.number.int({ min: 1, max: 5 }),
         date: faker.date.recent({ days: 30 }),
-        user: user.id,
         resource: resource.id,
         team: team.id,
       },
     });
   }
 
-  // 6. Créer des commentaires
-  for (let i = 0; i < 100; i++) {
-    const user = faker.helpers.arrayElement(users);
+  for (let i = 0; i < 20; i++) {
     const resource = faker.helpers.arrayElement(resources);
     const team = faker.helpers.arrayElement(allTeams);
 
@@ -115,14 +85,13 @@ const seed = async (strapi) => {
       data: {
         content: faker.lorem.sentences(2),
         date: faker.date.recent({ days: 30 }),
-        user: user.id,
         resource: resource.id,
         team: team.id,
       },
     });
   }
 
-  console.log('✅ Seed terminé : équipes, utilisateurs, ressources, votes et commentaires créés.');
+  console.log('✅ Seed terminé : équipes, ressources, votes et commentaires créés.');
 };
 
 export default seed;
