@@ -6,10 +6,11 @@ export default {
   },
 
   async bootstrap({ strapi }: { strapi: any }) {
-    if (process.env.SHOULD_SEED) {
-      console.log('🌱 Seed automatique lancé...');
-      await seed(strapi);
-      console.log('✅ Seed terminé.');
-    }
+    // Seed automatique désactivé
+    // if (process.env.SHOULD_SEED) {
+    //   console.log('🌱 Seed automatique lancé...');
+    //   await seed(strapi);
+    //   console.log('✅ Seed terminé.');
+    // }
   },
 };
