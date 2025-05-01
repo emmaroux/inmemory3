@@ -27,7 +27,8 @@
     "resources": {
       "type": "relation",
       "relation": "manyToMany",
-      "target": "api::resource.resource"
+      "target": "api::resource.resource",
+      "mappedBy": "teams"
     },
     "votes": {
       "type": "relation",
@@ -40,6 +41,12 @@
       "relation": "oneToMany",
       "target": "api::comment.comment",
       "mappedBy": "team"
+    },
+    "users": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "teams"
     }
   }
 } 

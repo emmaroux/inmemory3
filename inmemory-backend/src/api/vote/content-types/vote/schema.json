@@ -12,7 +12,9 @@
   "attributes": {
     "value": {
       "type": "integer",
-      "required": true
+      "required": true,
+      "min": 1,
+      "max": 5
     },
     "date": {
       "type": "datetime",
@@ -28,6 +30,12 @@
       "type": "relation",
       "relation": "manyToOne",
       "target": "api::team.team",
+      "inversedBy": "votes"
+    },
+    "author": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
       "inversedBy": "votes"
     }
   }
