@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect } from 'react';
+import { getToken, setToken as setAuthToken, removeToken } from '../utils/auth';
 
 interface User {
   id: number;
@@ -11,7 +12,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ user: User; token: string }>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -21,21 +22,31 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setTokenState] = useState<string | null>(null);
 
   useEffect(() => {
-    // Vérifier si un token existe dans le localStorage au chargement
-    const storedToken = localStorage.getItem('token');
+    const storedToken = getToken();
     const storedUser = localStorage.getItem('user');
     if (storedToken && storedUser) {
-      setToken(storedToken);
+      setTokenState(storedToken);
       setUser(JSON.parse(storedUser));
     }
   }, []);
 
+  const setToken = (newToken: string | null) => {
+    if (newToken) {
+      setAuthToken(newToken);
+    } else {
+      removeToken();
+    }
+    setTokenState(newToken);
+  };
+
   const login = async (email: string, password: string) => {
     try {
-      const response = await fetch('http://localhost:1337/api/auth/local', {
+      console.log('Tentative de connexion avec:', { email });
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL}/api/auth/local`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -44,27 +55,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           identifier: email,
           password,
         }),
+        credentials: 'include',
       });
 
       const data = await response.json();
+      console.log('Réponse Strapi:', data);
 
       if (response.ok) {
-        setToken(data.jwt);
-        setUser(data.user);
-        localStorage.setItem('token', data.jwt);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        const { jwt, user } = data;
+        
+        // Stocker les données de manière atomique
+        await Promise.all([
+          new Promise<void>((resolve) => {
+            localStorage.setItem('user', JSON.stringify(user));
+            resolve();
+          }),
+          new Promise<void>((resolve) => {
+            setToken(jwt);
+            resolve();
+          })
+        ]);
+        
+        setUser(user);
+        
+        // Vérifier que le token est bien stocké
+        const storedToken = localStorage.getItem('token');
+        console.log('Token stocké avec succès:', storedToken === jwt);
+        
+        return { user, token: jwt };
       } else {
-        throw new Error(data.error?.message || 'Erreur de connexion');
+        if (data.error) {
+          console.error('Erreur détaillée:', data.error);
+          throw new Error(
+            data.error.message || 
+            (data.error.details?.errors?.[0]?.message) || 
+            'Erreur de connexion'
+          );
+        } else {
+          throw new Error('Erreur de connexion inconnue');
+        }
       }
     } catch (error) {
-      console.error('Erreur de connexion:', error);
+      console.error('Erreur complète:', error);
       throw error;
     }
   };
 
   const register = async (username: string, email: string, password: string) => {
     try {
-      const response = await fetch('http://localhost:1337/api/auth/local/register', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL}/api/auth/local/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -74,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email,
           password,
         }),
+        credentials: 'include',
       });
 
       const data = await response.json();
@@ -81,7 +121,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.ok) {
         setToken(data.jwt);
         setUser(data.user);
-        localStorage.setItem('token', data.jwt);
         localStorage.setItem('user', JSON.stringify(data.user));
       } else {
         throw new Error(data.error?.message || 'Erreur d\'inscription');
@@ -95,7 +134,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setToken(null);
     setUser(null);
-    localStorage.removeItem('token');
     localStorage.removeItem('user');
   };
 

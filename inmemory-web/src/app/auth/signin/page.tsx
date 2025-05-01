@@ -2,49 +2,32 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../../context/AuthContext';
 
 export default function SignIn() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      console.log('Tentative de connexion avec:', { email });
-      console.log('URL Strapi:', process.env.NEXT_PUBLIC_STRAPI_URL);
-
-      const response = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL}/api/auth/local`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          identifier: email,
-          password,
-        }),
-      });
-
-      const data = await response.json();
-      console.log('Réponse Strapi:', data);
-
-      if (data.error) {
-        setError(data.error.message || 'Email ou mot de passe incorrect');
+      const { user, token } = await login(email, password);
+      
+      // Attendre un court instant pour s'assurer que l'état est mis à jour
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      if (user && token) {
+        router.push('/');
       } else {
-        // Stocker le token
-        localStorage.setItem('token', data.jwt);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        router.push('/teams');
+        setError('Erreur lors de la connexion');
       }
     } catch (error) {
       console.error('Erreur de connexion:', error);
-      setError('Une erreur est survenue lors de la connexion');
+      setError(error instanceof Error ? error.message : 'Une erreur est survenue lors de la connexion');
     }
-  };
-
-  const handleGoogleLogin = () => {
-    window.location.href = `${process.env.NEXT_PUBLIC_STRAPI_URL}/api/connect/google`;
   };
 
   return (
@@ -54,26 +37,6 @@ export default function SignIn() {
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Connectez-vous à votre compte
           </h2>
-        </div>
-
-        <button
-          onClick={handleGoogleLogin}
-          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-        >
-          Continuer avec Google
-        </button>
-
-        <div className="mt-6">
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-gray-50 text-gray-500">
-                Ou continuez avec email
-              </span>
-            </div>
-          </div>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -127,7 +90,7 @@ export default function SignIn() {
             </button>
             <button
               type="button"
-              onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_STRAPI_URL}/api/auth/local/register`}
+              onClick={() => router.push('/auth/register')}
               className="group relative w-1/2 ml-4 flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
             >
               S'inscrire

@@ -3,9 +3,92 @@
 import { useState, useEffect, useCallback } from 'react';
 import ResourceGrid from './components/resources/ResourceGrid';
 import ResourceModal from './components/resources/ResourceModal';
-import { Resource, StrapiResponse } from './types';
+import { Resource } from './types';
 import Pagination from './components/common/Pagination';
-import { getSession } from './utils/session';
+import { useAuth } from './context/AuthContext';
+import { useRouter } from 'next/navigation';
+import { useApi } from './services/api';
+
+interface ApiResponse {
+  data: Array<{
+    id: number;
+    attributes: {
+      title: string;
+      description: string;
+      imageUrl: string | null;
+      link: string | null;
+      isPublic: boolean;
+      author: {
+        data: {
+          attributes: any;
+        };
+      };
+      teams: {
+        data: Array<{
+          id: number;
+          attributes: {
+            name: string;
+            color: string;
+            isWelcomeTeam: boolean;
+          };
+        }>;
+      };
+      votes: {
+        data: Array<{
+          id: number;
+          attributes: {
+            value: number;
+            date: string;
+            author: {
+              data: {
+                attributes: any;
+              };
+            };
+            team: {
+              data: {
+                attributes: any;
+              };
+            };
+            resource: {
+              data: {
+                attributes: any;
+              };
+            };
+          };
+        }>;
+      };
+      comments: {
+        data: Array<{
+          id: number;
+          attributes: {
+            content: string;
+            date: string;
+            author: {
+              data: {
+                attributes: any;
+              };
+            };
+            team: {
+              data: {
+                attributes: any;
+              };
+            };
+            resource: {
+              data: {
+                attributes: any;
+              };
+            };
+          };
+        }>;
+      };
+    };
+  }>;
+  meta: {
+    pagination?: {
+      pageCount: number;
+    };
+  };
+}
 
 export default function Home() {
   const [resources, setResources] = useState<Resource[]>([]);
@@ -15,6 +98,19 @@ export default function Home() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [pageSize] = useState(12);
+  const { user, token } = useAuth();
+  const router = useRouter();
+  const api = useApi();
+
+  // Vérification de la session au chargement
+  useEffect(() => {
+    const checkSession = async () => {
+      if (!user || !token) {
+        router.push('/auth/signin');
+      }
+    };
+    checkSession();
+  }, [user, token, router]);
 
   const handleCloseDetail = () => {
     setSelectedResource(null);
@@ -26,86 +122,72 @@ export default function Home() {
 
   const fetchData = useCallback(async () => {
     setLoadingState('loading');
-    const apiUrl = process.env.NEXT_PUBLIC_STRAPI_URL || "http://localhost:1337";
     try {
-      // Récupérer la session utilisateur
-      const session = await getSession();
-      
-      if (!session?.user?.id) {
+      if (!user?.id || !token) {
+        console.log('Données utilisateur:', { user, token });
         throw new Error('Utilisateur non connecté');
       }
 
-      let resourcesUrl = `${apiUrl}/api/resources/user/${session.user.id}?pagination[page]=${currentPage}&pagination[pageSize]=${pageSize}&populate[teams]=true&populate[author]=true&populate[votes][populate][author]=true&populate[votes][populate][team]=true&populate[comments][populate][author]=true&populate[comments][populate][team]=true`;
+      // Mise à jour de l'URL pour correspondre à la nouvelle route
+      const resourcesUrl = `/api/teams/resources?userId=${user.id}&populate[author]=*&populate[teams]=*&populate[votes]=*&populate[comments]=*`;
 
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-
-      if (session?.jwt) {
-        headers.Authorization = `Bearer ${session.jwt}`;
-      }
-
-      console.log('Fetching resources from URL:', resourcesUrl);
-      const resourcesResponse = await fetch(resourcesUrl, {
-        headers,
-        cache: 'no-store'
+      console.log('Tentative de récupération des ressources avec:', {
+        url: resourcesUrl,
+        userId: user.id
       });
-      
-      if (!resourcesResponse.ok) {
-        throw new Error(`Erreur HTTP: ${resourcesResponse.status}`);
-      }
-      
-      const resourcesData = await resourcesResponse.json();
-      console.log('Raw resources data:', JSON.stringify(resourcesData, null, 2));
+
+      const resourcesData = await api.get<ApiResponse>(resourcesUrl);
+      console.log('Données reçues de l\'API:', resourcesData);
       
       let formattedResources: Resource[] = [];
       
       if (Array.isArray(resourcesData.data)) {
-        formattedResources = resourcesData.data.map((item: any) => {
-          console.log('Processing item:', JSON.stringify(item, null, 2));
-          
-          if (!item) {
-            console.error('Invalid item structure:', item);
-            return null;
-          }
+        formattedResources = resourcesData.data
+          .map((item) => {
+            if (!item) {
+              console.error('Structure invalide:', item);
+              return null;
+            }
 
-          const resource = item.attributes || item;
+            const resource = item.attributes;
+            console.log('Traitement de la ressource:', resource);
 
-          return {
-            id: item.id,
-            title: resource.title || 'Sans titre',
-            description: resource.description || '',
-            imageUrl: resource.imageUrl || null,
-            link: resource.link || null,
-            isPublic: resource.isPublic || false,
-            author: resource.author?.data?.attributes || null,
-            teams: (resource.teams?.data || []).map((team: any) => ({
-              id: team.id,
-              name: team.attributes.name || '',
-              color: team.attributes.color || '',
-              isWelcomeTeam: team.attributes.isWelcomeTeam || false
-            })),
-            votes: (resource.votes?.data || []).map((vote: any) => ({
-              id: vote.id,
-              value: vote.attributes.value || 0,
-              date: vote.attributes.date,
-              author: vote.attributes.author?.data?.attributes || null,
-              team: vote.attributes.team?.data?.attributes || null,
-              resource: vote.attributes.resource?.data?.attributes || null
-            })),
-            comments: (resource.comments?.data || []).map((comment: any) => ({
-              id: comment.id,
-              content: comment.attributes.content || '',
-              date: comment.attributes.date,
-              author: comment.attributes.author?.data?.attributes || null,
-              team: comment.attributes.team?.data?.attributes || null,
-              resource: comment.attributes.resource?.data?.attributes || null
-            }))
-          };
-        }).filter(Boolean);
+            return {
+              id: item.id,
+              title: resource.title || 'Sans titre',
+              description: resource.description || '',
+              imageUrl: resource.imageUrl || null,
+              link: resource.link || null,
+              isPublic: resource.isPublic || false,
+              author: resource.author?.data?.attributes || null,
+              teams: (resource.teams?.data || []).map((team) => ({
+                id: team.id,
+                name: team.attributes.name || '',
+                color: team.attributes.color || '',
+                isWelcomeTeam: team.attributes.isWelcomeTeam || false
+              })),
+              votes: (resource.votes?.data || []).map((vote) => ({
+                id: vote.id,
+                value: vote.attributes.value || 0,
+                date: vote.attributes.date,
+                author: vote.attributes.author?.data?.attributes || null,
+                team: vote.attributes.team?.data?.attributes || null,
+                resource: vote.attributes.resource?.data?.attributes || null
+              })),
+              comments: (resource.comments?.data || []).map((comment) => ({
+                id: comment.id,
+                content: comment.attributes.content || '',
+                date: comment.attributes.date,
+                author: comment.attributes.author?.data?.attributes || null,
+                team: comment.attributes.team?.data?.attributes || null,
+                resource: comment.attributes.resource?.data?.attributes || null
+              }))
+            };
+          })
+          .filter((resource): resource is Resource => resource !== null);
       }
       
-      console.log('Formatted resources:', formattedResources);
+      console.log('Ressources formatées:', formattedResources);
       setResources(formattedResources);
       setTotalPages(resourcesData.meta?.pagination?.pageCount || 1);
       setError(null);
@@ -115,7 +197,7 @@ export default function Home() {
       setError(err instanceof Error ? err.message : 'Une erreur est survenue');
       setLoadingState('complete');
     }
-  }, [currentPage, pageSize]);
+  }, [currentPage, pageSize, user, token, api]);
 
   useEffect(() => {
     fetchData();

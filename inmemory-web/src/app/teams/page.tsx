@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useApi } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 interface Team {
   id: number;
@@ -12,31 +14,34 @@ interface Team {
   };
 }
 
+interface ApiResponse {
+  data: Team[];
+  meta: {
+    pagination?: {
+      page: number;
+      pageSize: number;
+      pageCount: number;
+      total: number;
+    };
+  };
+}
+
 export default function TeamsPage() {
   const router = useRouter();
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
+  const api = useApi();
+  const { user, token } = useAuth();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
+    if (!user || !token) {
       router.push('/auth/signin');
       return;
     }
 
     const fetchTeams = async () => {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL}/api/teams?populate=*`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error('Erreur lors de la récupération des équipes');
-        }
-
-        const data = await response.json();
+        const data = await api.get<ApiResponse>('/api/teams?populate=*');
         setTeams(data.data);
       } catch (error) {
         console.error('Erreur:', error);
@@ -46,45 +51,30 @@ export default function TeamsPage() {
     };
 
     fetchTeams();
-  }, [router]);
+  }, [router, api, user, token]);
 
   const handleTeamAction = async (teamId: number, action: 'join' | 'leave') => {
-    const token = localStorage.getItem('token');
     if (!token) return;
 
     try {
       const endpoint = action === 'join' 
-        ? `/api/team-memberships` 
+        ? '/api/team-memberships' 
         : `/api/team-memberships/${teamId}`;
       
-      const method = action === 'join' ? 'POST' : 'DELETE';
-      
-      const response = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL}${endpoint}`, {
-        method,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        ...(action === 'join' && {
-          body: JSON.stringify({
-            data: {
-              team: teamId,
-              status: 'PENDING'
-            }
-          })
-        })
-      });
-
-      if (response.ok) {
-        // Recharger les équipes
-        const updatedResponse = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL}/api/teams?populate=*`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+      if (action === 'join') {
+        await api.post(endpoint, {
+          data: {
+            team: teamId,
+            status: 'PENDING'
+          }
         });
-        const data = await updatedResponse.json();
-        setTeams(data.data);
+      } else {
+        await api.delete(endpoint);
       }
+
+      // Recharger les équipes
+      const data = await api.get<ApiResponse>('/api/teams?populate=*');
+      setTeams(data.data);
     } catch (error) {
       console.error('Erreur:', error);
     }
@@ -109,15 +99,15 @@ export default function TeamsPage() {
             className="bg-white rounded-lg shadow-sm p-6 border border-gray-200"
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">{team.attributes.name}</h2>
+              <h2 className="text-xl font-semibold text-gray-900">{team.attributes?.name || 'Sans nom'}</h2>
               <div
                 className="w-4 h-4 rounded-full"
-                style={{ backgroundColor: team.attributes.color }}
+                style={{ backgroundColor: team.attributes?.color || '#000000' }}
               />
             </div>
 
             <div className="mt-4">
-              {team.attributes.status ? (
+              {team.attributes?.status ? (
                 team.attributes.status === 'PENDING' ? (
                   <p className="text-sm text-yellow-600">Demande en attente</p>
                 ) : team.attributes.status === 'APPROVED' ? (
